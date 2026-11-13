@@ -1,8 +1,16 @@
-(() => {
-  const POSTS = (window.POSTS || []).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
+(async () => {
   const main = document.getElementById("main");
   const tagsEl = document.getElementById("tags");
+  const SITE = "Star Slate Téa";
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  /* posts live in posts.json, which the writing desk (write.html) edits */
+  let POSTS = [];
+  try {
+    const r = await fetch("posts.json?t=" + Date.now(), { cache: "no-store" });
+    if (r.ok) POSTS = await r.json();
+  } catch (_) {}
+  POSTS = POSTS.map((p, i) => [p, i]).sort((a, b) => String(b[0].date).localeCompare(String(a[0].date)) || a[1] - b[1]).map((x) => x[0]);
 
   const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const fmtDate = (iso) => {
@@ -12,44 +20,49 @@
 
   const blocks = (raw) => String(raw || "").trim().split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
   const blockHTML = (b) =>
-    b.startsWith("<") ? b : b.startsWith(">") ? `<blockquote>${b.replace(/^>\s?/gm, "")}</blockquote>` : `<p>${b}</p>`;
+    b.startsWith(">") ? `<blockquote>${esc(b.replace(/^>\s?/gm, ""))}</blockquote>` : `<p>${esc(b)}</p>`;
 
   const meta = (p) =>
     `<p class="meta">${[fmtDate(p.date), p.tag].filter(Boolean).map((t) => `<span>${esc(t)}</span>`).join("")}</p>`;
-  const image = (p) => (p.image ? `<img src="${esc(p.image)}" alt="">` : "");
+  const pictures = (p, max) =>
+    (p.images || []).slice(0, max).map((src) => `<img src="${esc(src)}" alt="" loading="lazy">`).join("");
 
   let filter = null;
 
   function renderTags() {
     const tags = [...new Set(POSTS.map((p) => p.tag).filter(Boolean))];
-    tagsEl.innerHTML = tags.length < 2 ? "" :
+    let html = tags.length < 2 ? "" :
       [null, ...tags].map((t) => `<button aria-pressed="${t === filter}" data-tag="${esc(t ?? "")}">${esc(t ?? "all")}</button>`).join("");
+    // only the browser that is signed in at the writing desk sees this link
+    try { if (localStorage.getItem("ssk-key")) html += `<a class="write-link" href="write.html">✦ write</a>`; } catch (_) {}
+    tagsEl.innerHTML = html;
   }
 
   function renderList() {
-    document.title = "Téa";
+    document.title = SITE;
     const list = POSTS.filter((p) => !filter || p.tag === filter);
     if (!list.length) return (main.innerHTML = `<p class="empty">Nothing here yet.</p>`);
     main.innerHTML = list.map((p) => {
       const b = blocks(p.body);
-      const long = b.length > 3;
+      const nPics = (p.images || []).length;
+      const long = b.length > 3 || nPics > 1;
       return `<article class="post">
         ${meta(p)}
         <h2><a href="#${esc(p.id)}">${esc(p.title)}</a></h2>
-        ${image(p)}
-        <div class="body">${(long ? b.slice(0, 2) : b).map(blockHTML).join("")}</div>
-        ${long ? `<a class="more" href="#${esc(p.id)}">Keep reading →</a>` : ""}
+        ${pictures(p, 1)}
+        <div class="body">${(b.length > 3 ? b.slice(0, 2) : b).map(blockHTML).join("")}</div>
+        ${long ? `<a class="more" href="#${esc(p.id)}">${b.length > 3 ? "Keep reading" : `See all ${nPics} pictures`} →</a>` : ""}
       </article>`;
     }).join("");
   }
 
   function renderPost(i) {
     const p = POSTS[i], newer = POSTS[i - 1], older = POSTS[i + 1];
-    document.title = p.title + " · Téa";
+    document.title = p.title + " · " + SITE;
     main.innerHTML = `<article class="post single">
         ${meta(p)}
         <h2>${esc(p.title)}</h2>
-        ${image(p)}
+        ${pictures(p)}
         <div class="body">${blocks(p.body).map(blockHTML).join("")}</div>
         <a class="back" href="#">← all posts</a>
       </article>

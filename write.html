@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Writing desk · Star Slate Téa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=UnifrakturCook:wght@700&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Silkscreen&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=3">
+</head>
+<body>
+
+<div class="page">
+  <header class="site">
+    <a class="title" href="./">Star Slate Téa</a>
+    <nav class="tags"><button id="logout" hidden>sign out</button></nav>
+  </header>
+
+  <main>
+    <!-- signed out -->
+    <section class="desk" id="login" hidden>
+      <h2>Sign in</h2>
+      <p class="hint">Paste your key to unlock the writing desk. It is remembered on this device only.</p>
+      <form id="login-form" class="row">
+        <input type="password" id="key" aria-label="Key" placeholder="your key" autocomplete="off" required>
+        <button class="btn" id="unlock">Unlock</button>
+      </form>
+      <p class="status" id="login-msg" role="status"></p>
+    </section>
+
+    <!-- signed in -->
+    <section class="desk" id="editor" hidden>
+      <form id="post-form">
+        <h2 id="form-heading">New post</h2>
+
+        <label for="title">Title</label>
+        <input type="text" id="title" required maxlength="140">
+
+        <div class="row">
+          <div><label for="date">Date</label><input type="date" id="date" required></div>
+          <div><label for="tag">Tag <i>(optional)</i></label><input type="text" id="tag" list="taglist" maxlength="30"><datalist id="taglist"></datalist></div>
+        </div>
+
+        <label for="body">Words</label>
+        <textarea id="body" rows="12"></textarea>
+        <p class="hint">Leave a blank line between paragraphs. Start a line with &gt; to make it a quote.</p>
+
+        <label for="pics">Pictures <i>(optional)</i></label>
+        <input type="file" id="pics" accept="image/*" multiple>
+        <div class="thumbs" id="thumbs"></div>
+
+        <div class="row actions">
+          <button class="btn" id="publish">Publish</button>
+          <button class="btn quiet" type="button" id="cancel" hidden>Cancel editing</button>
+        </div>
+        <p class="status" id="status" role="status"></p>
+      </form>
+
+      <h2>Your posts</h2>
+      <ul class="mine" id="list"></ul>
+    </section>
+  </main>
+
+  <footer class="site-foot">✦</footer>
+</div>
+
+<script>
+(() => {
+  /* Where the blog lives. Publishing saves straight into this GitHub repository. */
+  const OWNER = "liamlf", REPO = "tea", BRANCH = "main";
+  const API = `https://api.github.com/repos/${OWNER}/${REPO}`;
+  const STORE = "ssk-key";
+  const MAX_SIDE = 1600; // pictures are shrunk to this before upload
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  let token = null;
+  try { token = localStorage.getItem(STORE); } catch (_) {}
+  let posts = [], postsSha, editing = null;
+  let pics = []; // { path } for pictures already on the blog, { blob, url } for new ones
+  let removed = []; // paths taken off a post being edited
+
+  /* ---------- talking to GitHub ---------- */
+  const gh = (path, opts = {}) =>
+    fetch(API + path, {
+      ...opts,
+      cache: "no-store",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: "Bearer " + token,
+        "X-GitHub-Api-Version": "2022-11-28",
+        ...(opts.body ? { "Content-Type": "application/json" } : {})
+      }
+    });
+
+  const toB64 = (str) => {
+    const bytes = new TextEncoder().encode(str);
+    let out = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) out += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(out);
+  };
+  const fromB64 = (b64) => new TextDecoder().decode(Uint8Array.from(atob(b64.replace(/\s/g, "")), (c) => c.charCodeAt(0)));
+
+  function explain(status) {
+    if (status === 401) return "That key isn't recognised any more. Sign out and paste a fresh one.";
+    if (status === 403 || status === 404) return "This key isn't allowed to change the blog.";
+    if (status === 409 || status === 422) return "The blog changed somewhere else. Reload this page and try again.";
+    return "Something went wrong (" + status + "). Nothing was lost; try again.";
+  }
+
+  async function loadPosts() {
+    const r = await gh(`/contents/posts.json?ref=${BRANCH}`);
+    if (r.status === 404) { posts = []; postsSha = undefined; return; }
+    if (!r.ok) throw new Error(explain(r.status));
+    const j = await r.json();
+    posts = JSON.parse(fromB64(j.content) || "[]");
+    postsSha = j.sha;
+  }
+
+  async function savePosts(message) {
+    const r = await gh("/contents/posts.json", {
+      method: "PUT",
+      body: JSON.stringify({ message, content: toB64(JSON.stringify(posts, null, 2) + "\n"), sha: postsSha, branch: BRANCH })
+    });
+    if (!r.ok) throw new Error(explain(r.status));
+    postsSha = (await r.json()).content.sha;
+  }
+
+  async function uploadPicture(blob, path) {
+    const b64 = await new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => res(String(fr.result).split(",")[1]);
+      fr.onerror = rej;
+      fr.readAsDataURL(blob);
+    });
+    const r = await gh("/contents/" + path, { method: "PUT", body: JSON.stringify({ message: "Add picture", content: b64, branch: BRANCH }) });
+    if (!r.ok) throw new Error(explain(r.status));
+  }
+
+  async function deleteFile(path) { // best effort: a leftover picture is harmless
+    try {
+      const r = await gh(`/contents/${path}?ref=${BRANCH}`);
+      if (!r.ok) return;
+      const { sha } = await r.json();
+      await gh("/contents/" + path, { method: "DELETE", body: JSON.stringify({ message: "Remove picture", sha, branch: BRANCH }) });
+    } catch (_) {}
+  }
+
+  /* ---------- pictures ---------- */
+  async function shrink(file) {
+    const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+    const k = Math.min(1, MAX_SIDE / Math.max(bmp.width, bmp.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(bmp.width * k);
+    c.height = Math.round(bmp.height * k);
+    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+    // re-encoding also drops hidden photo data such as where it was taken
+    return new Promise((res) => c.toBlob(res, "image/jpeg", 0.85));
+  }
+
+  function drawThumbs() {
+    $("thumbs").innerHTML = pics.map((p, i) =>
+      `<figure><img src="${esc(p.url || p.path)}" alt=""><button type="button" data-i="${i}" aria-label="Remove picture">✕</button></figure>`).join("");
+  }
+
+  $("pics").addEventListener("change", async (e) => {
+    for (const file of e.target.files) {
+      try {
+        const blob = await shrink(file);
+        pics.push({ blob, url: URL.createObjectURL(blob) });
+      } catch (_) {
+        say("status", `Couldn't read "${file.name}". Try a JPG or PNG.`, true);
+      }
+    }
+    e.target.value = "";
+    drawThumbs();
+  });
+
+  $("thumbs").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    const [gone] = pics.splice(+b.dataset.i, 1);
+    if (gone.path) removed.push(gone.path);
+    drawThumbs();
+  });
+
+  /* ---------- the form ---------- */
+  const say = (id, text, bad) => { $(id).textContent = text; $(id).classList.toggle("bad", !!bad); };
+  const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+
+  function slug(title) {
+    const base = title.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "post";
+    let id = base, n = 2;
+    while (posts.some((p) => p.id === id)) id = base + "-" + n++;
+    return id;
+  }
+
+  function resetForm() {
+    editing = null; pics = []; removed = [];
+    $("post-form").reset();
+    $("date").value = today();
+    $("form-heading").textContent = "New post";
+    $("publish").textContent = "Publish";
+    $("cancel").hidden = true;
+    drawThumbs();
+  }
+
+  function drawList() {
+    $("taglist").innerHTML = [...new Set(posts.map((p) => p.tag).filter(Boolean))].map((t) => `<option value="${esc(t)}">`).join("");
+    $("list").innerHTML = posts.length
+      ? posts.map((p) => `<li><span><b>${esc(p.title)}</b> <small>${esc(p.date)}</small></span>
+          <span><button type="button" class="link" data-edit="${esc(p.id)}">edit</button> <button type="button" class="link" data-del="${esc(p.id)}">delete</button></span></li>`).join("")
+      : `<li class="hint">Nothing published yet.</li>`;
+  }
+
+  $("list").addEventListener("click", async (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    const p = posts.find((x) => x.id === (b.dataset.edit || b.dataset.del));
+    if (!p) return;
+
+    if (b.dataset.edit) {
+      resetForm();
+      editing = p.id;
+      $("title").value = p.title; $("date").value = p.date; $("tag").value = p.tag || ""; $("body").value = p.body || "";
+      pics = (p.images || []).map((path) => ({ path }));
+      $("form-heading").textContent = "Editing a post";
+      $("publish").textContent = "Save changes";
+      $("cancel").hidden = false;
+      drawThumbs();
+      say("status", "");
+      scrollTo(0, 0);
+      return;
+    }
+
+    if (!confirm(`Delete "${p.title}"? This can't be undone here.`)) return;
+    b.disabled = true;
+    try {
+      posts = posts.filter((x) => x.id !== p.id);
+      await savePosts("Delete post: " + p.title);
+      for (const path of p.images || []) await deleteFile(path);
+      if (editing === p.id) resetForm();
+      say("status", "Deleted. It disappears from the blog in about a minute.");
+    } catch (err) {
+      await loadPosts().catch(() => {});
+      say("status", err.message, true);
+    }
+    drawList();
+  });
+
+  $("cancel").addEventListener("click", () => { resetForm(); say("status", ""); });
+
+  $("post-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("publish");
+    btn.disabled = true;
+    try {
+      const images = [];
+      const fresh = pics.filter((p) => p.blob).length;
+      let n = 0;
+      for (const p of pics) {
+        if (p.path) { images.push(p.path); continue; }
+        say("status", `Uploading picture ${++n} of ${fresh}…`);
+        const path = `photos/${Date.now()}-${n}.jpg`;
+        await uploadPicture(p.blob, path);
+        p.path = path; delete p.blob;
+        images.push(path);
+      }
+
+      say("status", "Publishing…");
+      const title = $("title").value.trim();
+      const post = { id: editing || slug(title), title, date: $("date").value, tag: $("tag").value.trim().toLowerCase(), images, body: $("body").value.trim() };
+      if (!post.tag) delete post.tag;
+      if (!images.length) delete post.images;
+
+      const at = posts.findIndex((p) => p.id === editing);
+      if (at >= 0) posts[at] = post; else posts.unshift(post);
+      posts = posts.map((p, i) => [p, i]).sort((a, b) => String(b[0].date).localeCompare(String(a[0].date)) || a[1] - b[1]).map((x) => x[0]);
+
+      await savePosts((editing ? "Edit post: " : "New post: ") + title);
+      for (const path of removed) await deleteFile(path);
+
+      const was = editing;
+      resetForm();
+      drawList();
+      $("status").innerHTML = `${was ? "Saved" : "Published"}. It shows up on <a href="./#${esc(post.id)}">the blog</a> in about a minute.`;
+      $("status").classList.remove("bad");
+    } catch (err) {
+      say("status", err.message || "Couldn't reach GitHub. Check your connection and try again.", true);
+    }
+    btn.disabled = false;
+  });
+
+  /* ---------- signing in and out ---------- */
+  async function open() {
+    $("login").hidden = true; $("editor").hidden = false; $("logout").hidden = false;
+    resetForm();
+    try { await loadPosts(); } catch (err) { say("status", err.message, true); }
+    drawList();
+  }
+  function close() {
+    token = null;
+    try { localStorage.removeItem(STORE); } catch (_) {}
+    $("editor").hidden = true; $("logout").hidden = true; $("login").hidden = false;
+    $("key").value = "";
+  }
+
+  $("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    token = $("key").value.trim();
+    $("unlock").disabled = true;
+    say("login-msg", "Checking…");
+    try {
+      const r = await gh("");
+      if (!r.ok) throw new Error(r.status === 401 ? "That key isn't right." : explain(r.status));
+      try { localStorage.setItem(STORE, token); } catch (_) {}
+      say("login-msg", "");
+      open();
+    } catch (err) {
+      token = null;
+      say("login-msg", err.message || "Couldn't reach GitHub.", true);
+    }
+    $("unlock").disabled = false;
+  });
+
+  $("logout").addEventListener("click", close);
+
+  token ? open() : ($("login").hidden = false);
+})();
+</script>
+</body>
+</html>
