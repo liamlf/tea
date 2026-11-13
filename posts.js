@@ -64,7 +64,7 @@ You're the only person I know who could be all of those things in the same after
 
 Write whatever you want here. I'll read every page.
 
-<p class="sig">— yours (sign your name here, builder of this site)</p>
+<p class="sig">— yours</p>
 `
   },
   {
