@@ -108,6 +108,26 @@
   drawSky();
   addEventListener("resize", drawSky);
 
+  /* little stars that follow the mouse */
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches && matchMedia("(pointer: fine)").matches) {
+    let last = 0;
+    const glyphs = ["✦", "✧", "⋆", "★"];
+    addEventListener("pointermove", (e) => {
+      const now = performance.now();
+      if (now - last < 55) return;
+      last = now;
+      const g = document.createElement("span");
+      g.className = "glint";
+      g.textContent = glyphs[(Math.random() * glyphs.length) | 0];
+      g.style.left = e.clientX + 6 + "px";
+      g.style.top = e.clientY + 6 + "px";
+      g.style.setProperty("--dx", (Math.random() * 30 - 15).toFixed(0) + "px");
+      if (Math.random() < 0.4) g.style.color = "#ffc9ea";
+      document.body.appendChild(g);
+      setTimeout(() => g.remove(), 800);
+    });
+  }
+
   renderTags();
   route();
 })();
