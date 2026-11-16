@@ -1,7 +1,7 @@
 (async () => {
   const main = document.getElementById("main");
   const tagsEl = document.getElementById("tags");
-  const SITE = "Star Slate Téa";
+  const SITE = "Aurora Hate Kid";
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   /* posts live in posts.json, which the writing desk (write.html) edits */
