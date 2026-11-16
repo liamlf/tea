@@ -32,6 +32,27 @@
     (p.songs || []).filter((s) => /^(track|album|playlist|episode|show)\/[A-Za-z0-9]+$/.test(s)).map((s) =>
       `<iframe class="song" src="https://open.spotify.com/embed/${s}" height="${/^(track|episode)\//.test(s) ? 80 : 352}" loading="lazy" title="Spotify player" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>`).join("");
 
+  /* one sentence from her posts, the same for the whole day, a new one tomorrow */
+  function sentenceOfTheDay() {
+    const el = document.getElementById("daily");
+    const pool = [];
+    for (const p of POSTS) {
+      String(p.body || "").replace(/^>\s?/gm, "").split(/(?<=[.!?…])\s+|\n+/).forEach((s) => {
+        s = s.trim();
+        const words = s.split(/\s+/).length;
+        if (words >= 4 && s.length <= 180) pool.push({ s, id: p.id });
+      });
+    }
+    if (!pool.length) return;
+    const d = new Date();
+    const day = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+    let h = 2166136261; // FNV-1a hash of today's date picks the sentence
+    for (const c of day) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+    const pick = pool[(h >>> 0) % pool.length];
+    el.innerHTML = `<a href="#${esc(pick.id)}">“${esc(pick.s)}”</a>`;
+    el.hidden = false;
+  }
+
   let filter = null;
 
   function renderTags() {
@@ -136,6 +157,7 @@
     });
   }
 
+  sentenceOfTheDay();
   renderTags();
   route();
 })();
