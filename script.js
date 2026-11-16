@@ -27,6 +27,11 @@
   const pictures = (p, max) =>
     (p.images || []).slice(0, max).map((src) => `<img src="${esc(src)}" alt="" loading="lazy">`).join("");
 
+  // songs are stored as "track/abc123"; anything else is ignored
+  const songPlayers = (p) =>
+    (p.songs || []).filter((s) => /^(track|album|playlist|episode|show)\/[A-Za-z0-9]+$/.test(s)).map((s) =>
+      `<iframe class="song" src="https://open.spotify.com/embed/${s}" height="${/^(track|episode)\//.test(s) ? 80 : 352}" loading="lazy" title="Spotify player" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>`).join("");
+
   let filter = null;
 
   function renderTags() {
@@ -51,6 +56,7 @@
         <h2><a href="#${esc(p.id)}">${esc(p.title)}</a></h2>
         ${pictures(p, 1)}
         <div class="body">${(b.length > 3 ? b.slice(0, 2) : b).map(blockHTML).join("")}</div>
+        ${songPlayers(p)}
         ${long ? `<a class="more" href="#${esc(p.id)}">${b.length > 3 ? "Keep reading" : `See all ${nPics} pictures`} →</a>` : ""}
       </article>`;
     }).join("");
@@ -64,6 +70,7 @@
         <h2>${esc(p.title)}</h2>
         ${pictures(p)}
         <div class="body">${blocks(p.body).map(blockHTML).join("")}</div>
+        ${songPlayers(p)}
         <a class="back" href="#">← all posts</a>
       </article>
       <nav class="pager">

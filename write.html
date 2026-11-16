@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=UnifrakturCook:wght@700&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Silkscreen&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 
@@ -51,6 +51,14 @@
         <input type="file" id="pics" accept="image/*" multiple>
         <div class="thumbs" id="thumbs"></div>
 
+        <label for="song">Songs <i>(optional)</i></label>
+        <div class="row">
+          <input type="text" id="song" placeholder="paste a Spotify link" autocomplete="off">
+          <button class="btn quiet" type="button" id="add-song">Add</button>
+        </div>
+        <p class="hint">In Spotify: Share → Copy Song Link. Albums and playlists work too.</p>
+        <div class="songs" id="songs"></div>
+
         <div class="row actions">
           <button class="btn" id="publish">Publish</button>
           <button class="btn quiet" type="button" id="cancel" hidden>Cancel editing</button>
@@ -82,6 +90,7 @@
   let posts = [], postsSha, editing = null;
   let pics = []; // { path } for pictures already on the blog, { blob, url } for new ones
   let removed = []; // paths taken off a post being edited
+  let songs = []; // e.g. "track/abc123"
 
   /* ---------- talking to GitHub ---------- */
   const gh = (path, opts = {}) =>
@@ -187,6 +196,38 @@
     drawThumbs();
   });
 
+  /* ---------- songs ---------- */
+  // a Spotify link or URI becomes "track/abc123" (also album, playlist, episode, show)
+  function parseSong(text) {
+    const m = String(text).match(/open\.spotify\.com\/(?:intl-[a-z-]+\/)?(track|album|playlist|episode|show)\/([A-Za-z0-9]+)/i)
+      || String(text).match(/spotify:(track|album|playlist|episode|show):([A-Za-z0-9]+)/i);
+    return m ? m[1].toLowerCase() + "/" + m[2] : null;
+  }
+
+  function drawSongs() {
+    $("songs").innerHTML = songs.map((s, i) =>
+      `<figure><iframe src="https://open.spotify.com/embed/${esc(s)}" height="80" loading="lazy" title="Spotify player" allow="encrypted-media"></iframe><button type="button" data-i="${i}" aria-label="Remove song">✕</button></figure>`).join("");
+  }
+
+  function addSong() {
+    const s = parseSong($("song").value);
+    if (!s) return say("status", "That doesn't look like a Spotify link. Use Share → Copy Song Link in Spotify.", true);
+    if (!songs.includes(s)) songs.push(s);
+    $("song").value = "";
+    say("status", "");
+    drawSongs();
+  }
+
+  $("add-song").addEventListener("click", addSong);
+  $("song").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addSong(); } });
+  $("song").addEventListener("paste", () => setTimeout(() => parseSong($("song").value) && addSong()));
+  $("songs").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    songs.splice(+b.dataset.i, 1);
+    drawSongs();
+  });
+
   /* ---------- the form ---------- */
   const say = (id, text, bad) => { $(id).textContent = text; $(id).classList.toggle("bad", !!bad); };
   const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
@@ -199,7 +240,8 @@
   }
 
   function resetForm() {
-    editing = null; pics = []; removed = [];
+    editing = null; pics = []; removed = []; songs = [];
+    drawSongs();
     $("post-form").reset();
     $("date").value = today();
     $("form-heading").textContent = "New post";
@@ -227,6 +269,8 @@
       editing = p.id;
       $("title").value = p.title; $("date").value = p.date; $("tag").value = p.tag || ""; $("body").value = p.body || "";
       pics = (p.images || []).map((path) => ({ path }));
+      songs = (p.songs || []).slice();
+      drawSongs();
       $("form-heading").textContent = "Editing a post";
       $("publish").textContent = "Save changes";
       $("cancel").hidden = false;
@@ -272,8 +316,9 @@
 
       say("status", "Publishing…");
       const title = $("title").value.trim();
-      const post = { id: editing || slug(title), title, date: $("date").value, tag: $("tag").value.trim().toLowerCase(), images, body: $("body").value.trim() };
+      const post = { id: editing || slug(title), title, date: $("date").value, tag: $("tag").value.trim().toLowerCase(), images, songs: songs.slice(), body: $("body").value.trim() };
       if (!post.tag) delete post.tag;
+      if (!post.songs.length) delete post.songs;
       if (!images.length) delete post.images;
 
       const at = posts.findIndex((p) => p.id === editing);
