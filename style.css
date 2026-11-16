@@ -49,10 +49,11 @@ a:hover { color: #fff; }
   font-size: 44px;
   line-height: 1.1;
   text-decoration: none;
-  background: linear-gradient(180deg, #fff 0%, #dfe4ff 30%, #8d97cc 50%, #f3efff 58%, #e3b9e6 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #fdfbf4 50%, #ebe8df 78%, #cdd0da 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, .3));
 }
 
 .tags { display: flex; flex-wrap: wrap; gap: 4px 16px; }
