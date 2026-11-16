@@ -111,7 +111,83 @@
       ctx.arc(r() * innerWidth, r() * innerHeight, r() * 1.1 + 0.3, 0, 6.28);
       ctx.fill();
     }
+    drawForest(r);
   }
+
+  /* a forest at night along the bottom: far rows paler and misty, near rows almost black */
+  function drawForest(r) {
+    const W = innerWidth, H = innerHeight;
+    const scale = Math.min(H, W * 1.1); // keeps trees sensible on very wide or very tall screens
+    const rows = [
+      { base: 0.83, tall: 0.12, color: "#263439" },
+      { base: 0.88, tall: 0.15, color: "#19262a" },
+      { base: 0.94, tall: 0.19, color: "#0f1a19" },
+      { base: 1.02, tall: 0.24, color: "#070e0c" }
+    ];
+
+    // spruce: many narrow, slightly ragged tiers
+    const pine = (x, y, h) => {
+      const tiers = 8 + ((r() * 4) | 0), w = h * (0.24 + r() * 0.08);
+      ctx.fillRect(x - h * 0.015, y - h * 0.12, h * 0.03, h * 0.14);
+      for (let t = 0; t < tiers; t++) {
+        const k = t / tiers;
+        const bottom = y - h * 0.08 - h * k * 0.8;
+        const half = w * (1 - k) * 0.5 * (0.85 + r() * 0.3) + h * 0.01;
+        ctx.beginPath();
+        ctx.moveTo(x, bottom - h * 0.2);
+        ctx.lineTo(x + half, bottom + h * 0.015);
+        ctx.lineTo(x - half, bottom + h * 0.015);
+        ctx.closePath();
+        ctx.fill();
+      }
+    };
+
+    // broadleaf: a full, lumpy crown
+    const leafy = (x, y, h) => {
+      const cr = h * 0.27, cy = y - h * 0.6;
+      ctx.fillRect(x - h * 0.025, y - h * 0.45, h * 0.05, h * 0.47);
+      for (let i = 0; i < 11; i++) {
+        const a = r() * 6.28, dist = r() * cr * 0.8;
+        ctx.beginPath();
+        ctx.arc(x + Math.cos(a) * dist * 1.3, cy + Math.sin(a) * dist * 0.75, cr * (0.4 + r() * 0.35), 0, 6.28);
+        ctx.fill();
+      }
+    };
+
+    rows.forEach((row, i) => {
+      const baseY = row.base * H, maxH = row.tall * scale;
+      ctx.fillStyle = row.color;
+      ctx.fillRect(0, baseY - maxH * 0.15, W, H);
+      for (let x = -maxH * 0.3; x < W + maxH * 0.3; x += maxH * (0.08 + r() * 0.12)) {
+        const h = maxH * (0.6 + r() * 0.5), y = baseY + (r() - 0.5) * maxH * 0.08;
+        r() < 0.62 ? pine(x, y, h) : leafy(x, y, h);
+      }
+      if (i < rows.length - 1) { // mist rising in front of every row but the nearest
+        const g = ctx.createLinearGradient(0, baseY - maxH * 0.6, 0, baseY);
+        g.addColorStop(0, "rgba(150,165,200,0)");
+        g.addColorStop(1, "rgba(150,165,200,0.10)");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, baseY - maxH * 0.6, W, H);
+      }
+    });
+
+    // a few fireflies in the near trees, kept well apart so no two read as a pair of eyes
+    const flies = [], want = Math.max(3, Math.round(W / 150));
+    for (let tries = 0; flies.length < want && tries < 200; tries++) {
+      const fx = r() * W, fy = H * (0.86 + r() * 0.12);
+      if (flies.every(([x, y]) => Math.hypot(x - fx, y - fy) > 110)) flies.push([fx, fy]);
+    }
+    for (const [fx, fy] of flies) {
+      const fr = 3 + r() * 3;
+      const g = ctx.createRadialGradient(fx, fy, 0, fx, fy, fr);
+      g.addColorStop(0, "rgba(232,255,170,0.85)");
+      g.addColorStop(0.25, "rgba(210,255,140,0.35)");
+      g.addColorStop(1, "rgba(210,255,140,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(fx - fr, fy - fr, fr * 2, fr * 2);
+    }
+  }
+
   drawSky();
   addEventListener("resize", drawSky);
 
