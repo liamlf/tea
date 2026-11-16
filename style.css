@@ -63,10 +63,6 @@ a:hover { color: #fff; }
   color: var(--chalk-dim);
 }
 
-.daily { margin: 10px 0 0; max-width: 460px; font-size: 17px; line-height: 1.4; }
-.daily a { color: var(--chalk); text-decoration: none; }
-.daily a:hover { color: var(--pink); }
-
 .tags { display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .tags button, .meta, .back, .pager a {
   font-family: var(--f-pixel);
