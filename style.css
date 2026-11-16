@@ -23,7 +23,7 @@ body {
   font-family: var(--f-serif);
   font-size: 21px;
   line-height: 1.6;
-  background: linear-gradient(175deg, var(--slate) 0%, var(--slate-deep) 100%) fixed;
+  background: #000;
 }
 
 #sky { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
@@ -167,7 +167,7 @@ a:hover { color: #fff; }
   padding: 10px 12px;
   color: var(--chalk);
   font: inherit;
-  background: rgba(0, 0, 0, .25);
+  background: rgba(255, 255, 255, .05);
   border: 1px solid var(--line);
   border-radius: 4px;
   color-scheme: dark;
