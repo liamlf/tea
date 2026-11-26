@@ -1,5 +1,17 @@
 [
   {
+    "id": "home",
+    "title": "home",
+    "date": "2026-11-26",
+    "images": [
+      "photos/1795685446993-1.jpg"
+    ],
+    "songs": [
+      "track/31L5UB9HKtadbvVEGhkLGp"
+    ],
+    "body": "in your absence i realize home is not a place. is it in your presence."
+  },
+  {
     "id": "that-is-okay",
     "title": "that is okay",
     "date": "2026-11-23",
